@@ -18,7 +18,8 @@ import {
   CSpinner,
   CAlert,
   CBadge
-} from '@coreui/react';
+} from '@coreui/react'
+import { useNavigation } from '../contexts/NavigationContext'
 
 const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
   const [departmentDialogVisible, setDepartmentDialogVisible] = useState(false)
@@ -206,6 +207,7 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
       const enhancedResults = {
         ...scanResults,
         device: {
+          db_id: scanResults.device.id,
           ...scanResults.device,
           department: selectedDepartment,
           os_family: selectedOsFamily,
@@ -219,7 +221,8 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
           vendor: selectedCpeMatch.vendor,
           model: selectedCpeMatch.model,
           os_family: selectedOsFamily,
-          version: osVersion.trim()
+          version: osVersion.trim(),
+          department: selectedDepartment
         }
       }
       
@@ -381,7 +384,6 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
                       {cpeMatches.map((match, index) => (
                         <CListGroupItem 
                           key={index}
-                          action
                           onClick={() => handleCpeMatchSelect(match)}
                           style={{ cursor: 'pointer' }}
                           className={selectedCpeMatch?.cpe === match.cpe ? 'bg-light' : ''}
