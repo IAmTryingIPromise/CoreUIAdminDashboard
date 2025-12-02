@@ -60,11 +60,12 @@ const AppSidebar = () => {
       }}
     >
       <CSidebarHeader className="border-bottom">
-        <CSidebarBrand to="/" className="d-flex align-items-center">
-          <CIcon icon={cilShieldAlt} height={32} className="me-2" />
-          <div className="sidebar-brand-full">
-            <div className="fw-bold text-light">CyberSec</div>
-            <small className="text-light-emphasis">Dashboard</small>
+        <CSidebarBrand to="/" className="d-flex align-items-center text-decoration-none bg-transparent border-0 shadow-none">
+          <div className="d-flex flex-column align-items-center">
+            <div className="fw-bold text-light fs-6 lh-1">
+              Cyber-Situational Awareness
+            </div>
+            <small className="text-light-emphasis fs-6">Dashboard</small>
           </div>
         </CSidebarBrand>
         <CCloseButton

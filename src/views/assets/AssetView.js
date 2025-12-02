@@ -25,7 +25,7 @@ import { useNavigation } from '../../contexts/NavigationContext'
 const AssetDetail = () => {
   const { assetId } = useParams()
   const navigate = useNavigate()
-  const { assets, updateAsset, removeAsset } = useNavigation()
+  const { assets, updateAsset, removeAsset, setAssets } = useNavigation()
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [expandedItems, setExpandedItems] = useState({})
@@ -128,6 +128,7 @@ const AssetDetail = () => {
   }
 
   const handleSave = async () => {
+    const startTime = performance.now()
     if (!enrichedAsset) return
     
     setIsSaving(true)
@@ -140,6 +141,23 @@ const AssetDetail = () => {
     
     if (osVersionChanged || osFamilyChanged) {
       try {
+        // Step 1: Delete old asset from backend database
+        if (enrichedAsset.db_id) {
+          const deleteResponse = await fetch(`http://localhost:8000/api/v1/security/devices/${enrichedAsset.db_id}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          })
+          
+          if (!deleteResponse.ok) {
+            throw new Error('Failed to delete old asset from backend')
+          }
+          
+          console.log('✅ Old asset deleted from backend')
+        }
+        
+        // Step 2: Scan device with new OS version to get fresh data
         const requestBody = {
           device_name: enrichedAsset.scan_params?.device_name || enrichedAsset.name,
           h_cpe: enrichedAsset.h_cpe || enrichedAsset.scan_params?.h_cpe || '',
@@ -150,7 +168,7 @@ const AssetDetail = () => {
           department: enrichedAsset.department || ''
         }
         
-        const response = await fetch('http://localhost:8000/api/v1/security/scan-by-os', {
+        const scanResponse = await fetch('http://localhost:8000/api/v1/security/scan-by-os', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -158,20 +176,68 @@ const AssetDetail = () => {
           body: JSON.stringify(requestBody)
         })
 
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+        if (!scanResponse.ok) {
+          const errorData = await scanResponse.json()
+          throw new Error(errorData.detail || `HTTP error! status: ${scanResponse.status}`)
         }
 
-        const apiResponse = await response.json()
-        if (apiResponse.success) {
-          // CRITICAL: Pass the FULL apiResponse, not partial data
-          updateAsset(enrichedAsset.id, apiResponse)
-          
-          alert('Asset updated successfully!')
-        } else {
-          throw new Error(apiResponse.error_message || 'Update failed')
+        const apiResponse = await scanResponse.json()
+        
+        if (!apiResponse.success) {
+          throw new Error(apiResponse.error_message || 'Scan failed')
         }
+        
+        console.log('✅ New scan completed with updated OS version')
+        
+        // Step 3: Replace the asset data while keeping the same frontend ID
+        setAssets(prev => {
+          return prev.map(asset => {
+            if (asset.id !== enrichedAsset.id) return asset
+            
+            // Keep the same frontend ID, replace everything else
+            return {
+              id: asset.id, // KEEP THE SAME FRONTEND ID
+              db_id: apiResponse.device?.id || null, // NEW database ID from rescan
+              name: apiResponse.device?.name || asset.name,
+              vendor: apiResponse.device?.vendor || asset.vendor,
+              model: apiResponse.device?.model || asset.model,
+              version: apiResponse.device?.version || editableFields.osVersion,
+              type: apiResponse.device?.type || asset.type,
+              department: asset.department, // Preserve original department
+              description: apiResponse.device?.description || '',
+              risk_level: apiResponse.device?.risk_level || 0,
+              os_family: apiResponse.device?.os_family || editableFields.osFamily,
+              h_cpe: apiResponse.device?.h_cpe || asset.h_cpe,
+              scan_params: {
+                device_name: apiResponse.device?.name || asset.name,
+                h_cpe: apiResponse.device?.h_cpe || asset.h_cpe,
+                vendor: apiResponse.device?.vendor || asset.vendor,
+                model: apiResponse.device?.model || asset.model,
+                os_family: apiResponse.device?.os_family || editableFields.osFamily,
+                version: apiResponse.device?.version || editableFields.osVersion,
+                department: asset.department
+              },
+              vulnerabilities: {
+                cves: apiResponse.cves || [],
+                cwes: apiResponse.cwes || [],
+                capecs: apiResponse.capecs || [],
+                attacks: apiResponse.attacks || []
+              },
+              statistics: apiResponse.statistics || {},
+              scan_time: apiResponse.scan_time || 0,
+              last_updated: new Date().toISOString(),
+              deviceType: apiResponse.device?.type || asset.type
+            }
+          })
+        })
+        
+        console.log('✅ Asset data replaced with new scan results')
+        
+        setIsEditing(false)
+
+        const endTime = performance.now()
+        console.log(`Updating Asset Version: end to end time: ${(endTime - startTime).toFixed(2)} ms`)
+        
       } catch (error) {
         console.error('Error updating asset:', error)
         alert(`Failed to update: ${error.message}`)
@@ -179,27 +245,27 @@ const AssetDetail = () => {
     }
     
     setIsSaving(false)
-    setIsEditing(false)
   }
 
   const handleDelete = async () => {
+    const startTime = performance.now()
     if (!enrichedAsset) return
-    
+    /*
     if (!window.confirm(`Are you sure you want to delete ${enrichedAsset.name}?`)) {
       return
-    }
+    }*/
     
     setIsDeleting(true)
     
     try {
       // Remove the asset using central state management
-      removeAsset(enrichedAsset.id)
+      await removeAsset(enrichedAsset.id)
       
       // Navigate back to overview
       navigate('/overview')
       
-      // Show success feedback
-      alert('Asset deleted successfully!')
+      const endTime = performance.now()
+      console.log(`Deleting Asset: end to end time: ${(endTime - startTime).toFixed(2)} ms`)
     } catch (error) {
       console.error('Error deleting asset:', error)
       alert(`Failed to delete: ${error.message}`)
@@ -303,7 +369,7 @@ const AssetDetail = () => {
                   <CListGroup flush>
                     <CListGroupItem className="d-flex justify-content-between">
                       <strong>Name:</strong>
-                      <span>{enrichedAsset.name + enrichedAsset.id}</span>
+                      <span>{enrichedAsset.name}</span>
                     </CListGroupItem>
                     <CListGroupItem className="d-flex justify-content-between">
                       <strong>Vendor:</strong>
@@ -789,11 +855,8 @@ const AssetDetail = () => {
                   {enrichedAsset.hasVulnerabilities ? (
                     <CAlert color="danger" className="mb-0">
                       <strong>Action Required:</strong> This device has {
-                        (enrichedAsset.vulnerabilities.cves?.length || 0) + 
-                        (enrichedAsset.vulnerabilities.cwes?.length || 0) + 
-                        (enrichedAsset.vulnerabilities.capecs?.length || 0) + 
-                        (enrichedAsset.vulnerabilities.attacks?.length || 0)
-                      } security findings that should be reviewed and addressed.
+                        (enrichedAsset.vulnerabilities.cves?.length || 0)
+                      } vulnerabilities that should be reviewed and addressed.
                     </CAlert>
                   ) : (
                     <CAlert color="success" className="mb-0">
@@ -806,62 +869,6 @@ const AssetDetail = () => {
           </CCard>
         </CCol>
       </CRow>
-      {enrichedAsset.vulnerabilities && enrichedAsset.vulnerabilities.cves.length > 0 && (
-        <>
-          <hr className="my-4" />
-          <CRow>
-            <CCol xs={12}>
-              <h5>Vulnerability Details</h5>
-            </CCol>
-          </CRow>
-          
-          <CRow>
-            <CCol md={6}>
-              <h6>CVEs ({enrichedAsset.vulnerabilities.cves.length})</h6>
-              <CListGroup flush style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                {enrichedAsset.vulnerabilities.cves.slice(0, 10).map((cve, index) => (
-                  <CListGroupItem key={index}>
-                    <div className="d-flex justify-content-between align-items-start">
-                      <div>
-                        <code className="text-primary">{cve.cve_id}</code>
-                        <div className="small text-muted mt-1">
-                          {cve.description?.substring(0, 100)}...
-                        </div>
-                      </div>
-                      <div className="text-end">
-                        <CBadge color={cve.cvss >= 7 ? 'danger' : cve.cvss >= 4 ? 'warning' : 'info'}>
-                          CVSS: {cve.cvss}
-                        </CBadge>
-                      </div>
-                    </div>
-                  </CListGroupItem>
-                ))}
-                {enrichedAsset.vulnerabilities.cves.length > 10 && (
-                  <CListGroupItem className="text-center text-muted">
-                    ... and {enrichedAsset.vulnerabilities.cves.length - 10} more
-                  </CListGroupItem>
-                )}
-              </CListGroup>
-            </CCol>
-            
-            <CCol md={6}>
-              <h6>Attack Patterns ({enrichedAsset.vulnerabilities.capecs?.length || 0})</h6>
-              <CListGroup flush style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                {enrichedAsset.vulnerabilities.capecs?.slice(0, 5).map((capec, index) => (
-                  <CListGroupItem key={index}>
-                    <div>
-                      <strong>{capec.capec_id}</strong>: {capec.name}
-                      <div className="small text-muted mt-1">
-                        Severity: {capec.typical_severity}
-                      </div>
-                    </div>
-                  </CListGroupItem>
-                )) || <CListGroupItem className="text-muted">No attack patterns found</CListGroupItem>}
-              </CListGroup>
-            </CCol>
-          </CRow>
-        </>
-      )}
     </CContainer>
   )
 }
