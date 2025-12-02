@@ -27,32 +27,41 @@ const Overview = () => {
   const { assets, departments } = useNavigation()
   const [expandedAssets, setExpandedAssets] = React.useState({})
 
-  // Function to determine risk level based on CVSS score
-  const getCVSSRiskLevel = (riskLevel) => {
-  if (riskLevel >= 100) return 'Critical'  
-  if (riskLevel >= 75) return 'High'
-  if (riskLevel >= 50) return 'Medium'
-  if (riskLevel >= 0) return 'Low'
+  // Function to determine risk level
+  const getRiskLevel = (riskLevel) => {
+  if (riskLevel >= 91) return 'Critical'
+  if (riskLevel >= 50) return 'High'
+  if (riskLevel >= 25) return 'Medium'
+  if (riskLevel > 0) return 'Low'
   return 'None'
 }
 
   // Function to get badge color based on risk level
-  const getRiskBadgeColor = (riskLevel) => {
+  const getRiskLevelBadgeColor = (riskLevel) => {
     switch (riskLevel) {
-      case 'Critical': return 'danger'
-      case 'High': return 'warning'
-      case 'Medium': return 'info'
-      case 'Low': return 'success'
-      default: return 'secondary'
+      case 'Critical': return 'var(--risk-critical)'
+      case 'High': return 'var(--risk-high)'
+      case 'Medium': return 'var(--risk-medium)'
+      case 'Low': return 'var(--risk-low)'
+      case 'None': return 'var(--risk-none)'
+      default: return 'var(--risk-low)'
     }
   }
 
   // Function to get CVSS badge color
-  const getCVSSBadgeColor = (riskLevel) => {
-    if (riskLevel >= 100) return 'danger'
-    if (riskLevel >= 75) return 'warning'
-    if (riskLevel >= 50) return 'info'
-    return 'success'
+  const getCVSSBadgeColor = (cvss) => {
+    if (cvss >= 9.0) return 'var(--risk-critical)'
+    if (cvss >= 7.0) return 'var(--risk-high)'
+    if (cvss >= 4.0) return 'var(--risk-medium)'
+    return 'var(--risk-low)'
+  }
+
+  const getEPSSBandgeColor = (epss) => {
+    const epssPercent = epss * 100
+    if (epssPercent >= 75) return 'var(--risk-critical)'
+    if (epssPercent >= 50) return 'var(--risk-high)'
+    if (epssPercent >= 25) return 'var(--risk-medium)'
+    return 'var(--risk-low)'
   }
 
   // Process assets to include vulnerability summary
@@ -64,7 +73,7 @@ const Overview = () => {
         
         // Use risk_level directly from backend
         const maxRiskLevel = asset.risk_level || 0
-        const highestRisk = getCVSSRiskLevel(maxRiskLevel)
+        const highestRisk = getRiskLevel(maxRiskLevel)
 
         return {
           ...asset,
@@ -255,7 +264,7 @@ const Overview = () => {
                             </CTableDataCell>
                             <CTableDataCell>
                               <div className="d-flex flex-column align-items-start">
-                                <CBadge color={getRiskBadgeColor(asset.highestRisk)} className="mb-1">
+                                <CBadge style={{ backgroundColor: getRiskLevelBadgeColor(asset.highestRisk), color: 'white' }} className="mb-1">
                                   {asset.highestRisk}
                                 </CBadge>
                                 {asset.maxRiskLevel > 0 && (
@@ -296,35 +305,35 @@ const Overview = () => {
                                               <code className="text-primary me-2">{cve.cve_id}</code>
                                               
                                               {/* CVSS Badge */}
-                                              <CBadge color={getCVSSBadgeColor(cve.cvss || 0)} className="me-2">
+                                              <CBadge style={{ backgroundColor: getCVSSBadgeColor(cve.cvss || 0), color: 'white' }} className="me-2">
                                                 CVSS: {cve.cvss || 'N/A'}
                                               </CBadge>
                                               
                                               {/* Risk Level Badge - using backend's risk_level */}
                                               {(cve.risk_level !== undefined && cve.risk_level !== null) && (
-                                                <CBadge color="danger" className="me-2">
+                                                <CBadge style={{ backgroundColor: getRiskLevelBadgeColor(cve.risk_level), color: 'white' }} className="me-2">
                                                   Risk: {cve.risk_level.toFixed(2)}
                                                 </CBadge>
                                               )}
                                               
                                               {/* EPSS Badge */}
                                               {(cve.epss !== undefined && cve.epss !== null) && (
-                                                <CBadge color="warning" className="me-2">
+                                                <CBadge style={{ backgroundColor: getEPSSBandgeColor(cve.epss), color: 'white' }} className="me-2">
                                                   EPSS: {(cve.epss * 100).toFixed(2)}%
                                                 </CBadge>
                                               )}
                                               
                                               {/* Impact Score Badge */}
                                               {(cve.impact_score !== undefined && cve.impact_score !== null) && (
-                                                <CBadge color="info" className="me-2">
+                                                <CBadge style={{ backgroundColor: getCVSSBadgeColor(cve.impact_score), color: 'white' }} className="me-2">
                                                   Impact: {cve.impact_score.toFixed(2)}
                                                 </CBadge>
                                               )}
                                               
                                               {/* Exploitability Score Badge */}
                                               {(cve.exploitability_score !== undefined && cve.exploitability_score !== null) && (
-                                                <CBadge color="secondary" className="me-2">
-                                                  Exploit: {cve.exploitability_score.toFixed(2)}
+                                                <CBadge style={{ backgroundColor: getCVSSBadgeColor(cve.exploitability_score), color: 'white' }} className="me-2">
+                                                  Exploitability: {cve.exploitability_score.toFixed(2)}
                                                 </CBadge>
                                               )}
                                             </div>

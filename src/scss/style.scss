@@ -74,6 +74,11 @@ body {
   --cybersec-success: #28a745;
   --cybersec-dark: #1a1a1a;
   --cybersec-light: #f8f9fa;
+  --risk-none: #1a1a1a;
+  --risk-low: #27AE60;
+  --risk-medium: #D4AC0D;
+  --risk-high: #CA6F1E;
+  --risk-critical: #C0392B;
 }
 
 // Header enhancements
@@ -99,7 +104,7 @@ body {
 // Sidebar enhancements
 .sidebar {
   .sidebar-brand {
-    background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+    //background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
     
     .sidebar-brand-full {
       font-weight: 600;

@@ -17,8 +17,11 @@ import {
   CListGroupItem,
   CSpinner,
   CAlert,
+  CTooltip,
   CBadge
 } from '@coreui/react'
+import CIcon from '@coreui/icons-react'
+import { cilInfo } from '@coreui/icons'
 import { useNavigation } from '../contexts/NavigationContext'
 
 const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
@@ -34,6 +37,7 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
   const [selectedOsFamily, setSelectedOsFamily] = useState('');
   const [osVersion, setOsVersion] = useState('');
   const [isLoadingOsFamilies, setIsLoadingOsFamilies] = useState(false);
+  const [urls, setUrls] = useState([]);
   
   // Search and CPE matching states
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,6 +59,9 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
 
   // API call to search CPE matches
   const searchCpeMatches = async (query) => {
+
+    const startTime = performance.now()
+
     if (!query.trim()) {
       setCpeMatches([]);
       setShowResults(false);
@@ -82,6 +89,8 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
       const data = await response.json();
       setCpeMatches(data.matches || []);
       setShowResults(true);
+      const endTime = performance.now()
+      console.log(`Asset search: end to end time: ${(endTime - startTime).toFixed(2)} ms`)
     } catch (error) {
       console.error('CPE search error:', error);
       setSearchError('Failed to search devices. Please try again.');
@@ -152,6 +161,9 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
 
   // API call to get OS families by vendor
   const getOsFamilies = async (vendor) => {
+
+    const startTime = performance.now()
+
     setIsLoadingOsFamilies(true);
     try {
       const response = await fetch('http://localhost:8000/api/v1/security/get-os-families', {
@@ -169,20 +181,27 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
       }
 
       const data = await response.json();
+      console.log(data)
       setOsFamilies(data.os_families || []);
       setSelectedOsFamily(data.default_os_family || '');
+      setUrls(data.urls || '');
+      const endTime = performance.now()
+      console.log(`Os families: end to end time: ${(endTime - startTime).toFixed(2)} ms`)
       return data;
     } catch (error) {
       console.error('Error fetching OS families:', error);
       setSearchError('Failed to fetch OS families. Please try again.');
       setOsFamilies([]);
       setSelectedOsFamily('');
+      setUrls([]);
     } finally {
       setIsLoadingOsFamilies(false);
     }
   };
 
   const handleAssetConfirm = async () => {
+
+    const startTime = performance.now()
     if (!selectedCpeMatch || !selectedDepartment || !selectedOsFamily || !osVersion.trim()) return
 
     setIsScanning(true)
@@ -202,36 +221,15 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
       if (!scanResults.success) {
         throw new Error(scanResults.error_message || 'Scan failed')
       }
-
-      // Store OS information and h_cpe in the scan results for future refreshes
-      const enhancedResults = {
-        ...scanResults,
-        device: {
-          db_id: scanResults.device.id,
-          ...scanResults.device,
-          department: selectedDepartment,
-          os_family: selectedOsFamily,
-          version: osVersion.trim(),
-          h_cpe: selectedCpeMatch.cpe  // Store h_cpe in device
-        },
-        // Store scanning parameters for background refreshes
-        scan_params: {
-          device_name: selectedCpeMatch.device_name,
-          h_cpe: selectedCpeMatch.cpe,  // Store h_cpe for refreshes
-          vendor: selectedCpeMatch.vendor,
-          model: selectedCpeMatch.model,
-          os_family: selectedOsFamily,
-          version: osVersion.trim(),
-          department: selectedDepartment
-        }
-      }
       
       // Pass the full API response to addAsset
-      onAddAsset(enhancedResults)
+      onAddAsset(scanResults)
       
       // Reset form
       resetAssetForm()
       setAssetDialogVisible(false)
+      const endTime = performance.now()
+      console.log(`Initial CVE Scan: end to end time: ${(endTime - startTime).toFixed(2)} ms`)
     } catch (error) {
       setSearchError(`Failed to scan device: ${error.message}`)
     } finally {
@@ -249,6 +247,7 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
     setOsFamilies([]);
     setSelectedOsFamily('');
     setOsVersion('');
+    setSelectedDepartment('');
   };
 
   // Handle asset dialog cancel
@@ -391,14 +390,6 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
                           <div className="d-flex justify-content-between align-items-start">
                             <div className="flex-grow-1">
                               <div className="fw-bold">{match.device_name}</div>
-                              <div className="text-muted small">
-                                <strong>Vendor:</strong> {match.vendor} | <strong>Model:</strong> {match.model}
-                              </div>
-                              
-                              <div className="text-muted small" style={{ fontSize: '0.75rem' }}>
-                                CPE: {match.cpe}
-                              </div>
-                              
                             </div>
                             {/*}
                             <CBadge 
@@ -435,9 +426,11 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
                     <div><strong>Name:</strong> {selectedCpeMatch.device_name}</div>
                     <div><strong>Vendor:</strong> {selectedCpeMatch.vendor}</div>
                     <div><strong>Model:</strong> {selectedCpeMatch.model}</div>
+                    {/*
                     <div className="text-muted small mt-1">
                       <strong>CPE:</strong> {selectedCpeMatch.cpe}
                     </div>
+                    */}
                   </CCardBody>
                 </CCard>
               </CCol>
@@ -462,6 +455,25 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
                     </option>
                   ))}
                 </CFormSelect>
+                <CListGroup>
+                  <div>
+                     <CTooltip content="If you don't know which OS familiy and/or version your asset runs, check the following official vendor documentation for help">
+                        <CIcon
+                          icon={cilInfo}
+                          className="text-info"
+                          height={18}
+                          style={{ cursor: 'pointer', marginTop: '4px' }}
+                        />
+                      </CTooltip>
+                  </div>
+                  {urls.map((url, index) => (
+                    <CListGroupItem key={index}>
+                    <a href={`${url}`} target="_blank" rel="noopener noreferrer">
+                      {url}
+                    </a>
+                    </CListGroupItem>
+                  ))}
+                </CListGroup>
                 {isLoadingOsFamilies && (
                   <div className="mt-1">
                     <CSpinner size="sm" className="me-2" />
@@ -507,7 +519,7 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
           {isScanning && (
             <CAlert color="info">
               <CSpinner size="sm" className="me-2" />
-              Scanning device for vulnerabilities... This may take a few moments.
+              Scanning OS version for vulnerabilities... This may take a few moments.
             </CAlert>
           )}
         </CModalBody>
@@ -526,7 +538,7 @@ const DynamicNavButtons = ({ onAddDepartment, onAddAsset, departments }) => {
                 Scanning...
               </>
             ) : (
-              'Scan & Add Asset'
+              'Add Asset & Scan'
             )}
           </CButton>
         </CModalFooter>

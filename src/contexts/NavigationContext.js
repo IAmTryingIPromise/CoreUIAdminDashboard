@@ -89,7 +89,7 @@ export const NavigationProvider = ({ children }) => {
     
     const asset = {
       id: assetId,
-      db_id: apiResponse.device?.id || '',
+      db_id: apiResponse.device?.id || null,
       name: apiResponse.device?.name || 'Unknown Device',
       vendor: apiResponse.device?.vendor || 'Unknown Vendor',
       model: apiResponse.device?.model || 'Unknown Model',
@@ -138,6 +138,7 @@ export const NavigationProvider = ({ children }) => {
         
         return {
           id: asset.id,
+          db_id: asset.db_id,
           name: asset.name,
           vendor: asset.vendor,
           model: asset.model,
@@ -187,14 +188,38 @@ export const NavigationProvider = ({ children }) => {
     })
   }, [])
 
-  const removeAsset = useCallback((assetId) => {
+  const removeAsset = useCallback(async (assetId) => {
     if (abortControllersRef.current[assetId]) {
       abortControllersRef.current[assetId].abort()
       delete abortControllersRef.current[assetId]
     }
     
+    // Find the asset to get its db_id
+    const asset = assets.find(a => a.id === assetId)
+    
+    if (asset && asset.db_id) {
+      try {
+        // Call backend to delete from database
+        const response = await fetch(`http://localhost:8000/api/v1/security/devices/${asset.db_id}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        })
+        
+        if (!response.ok) {
+          console.error('Failed to delete asset from database:', response.status)
+          // Continue with frontend deletion even if backend fails
+        }
+      } catch (error) {
+        console.error('Error deleting asset from database:', error)
+        // Continue with frontend deletion even if backend fails
+      }
+    }
+    
+    // Remove from frontend state
     setAssets(prev => prev.filter(asset => asset.id !== assetId))
-  }, [])
+  }, [assets])
 
   const clearAllData = useCallback(() => {
     Object.values(abortControllersRef.current).forEach(controller => controller.abort())
@@ -249,6 +274,7 @@ export const NavigationProvider = ({ children }) => {
   const value = {
     departments,
     assets,
+    setAssets,
     addDepartment,
     addAsset,
     updateAsset,
